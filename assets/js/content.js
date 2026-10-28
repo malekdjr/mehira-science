@@ -9,7 +9,7 @@ window.CONTENT = {
     "phoneDial": "+213657856175",
     "whatsapp": "213657856175",
     "instagram": "https://www.instagram.com/professeur_mehira/",
-    "city": "وهران، الجزائروهران، الجزائر ✓"
+    "city": "وهران، الجزائروهران، الجزائر ✓وهران، الجزائر"
   },
   "stats": [
     {
