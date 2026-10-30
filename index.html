@@ -75,6 +75,7 @@
       <a href="#home">الرئيسية</a>
       <a href="#about">عن الأستاذ</a>
       <a href="#lessons">الدروس</a>
+      <a href="#resources">الملخصات</a>
       <a href="#schedule">برنامج الحصص</a>
       <a href="#centers">المراكز</a>
       <a href="#register">التسجيلات</a>
@@ -237,8 +238,20 @@
   </div>
 </section>
 
+<!-- ======================================================= الملخصات -->
+<section class="section" id="resources">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow"><span class="eyebrow__dot"></span> للتحميل</p>
+      <h2>ملخصات الأستاذ (PDF)</h2>
+      <p class="sec-head__lead">ملخصات الدروس والوحدات جاهزة للتحميل والمراجعة في أي وقت.</p>
+    </div>
+    <div id="resourcesGrid"></div>
+  </div>
+</section>
+
 <!-- ======================================================= البرنامج -->
-<section class="section" id="schedule">
+<section class="section section--alt" id="schedule">
   <div class="wrap">
     <div class="sec-head">
       <p class="eyebrow"><span class="eyebrow__dot"></span> التنظيم</p>
@@ -257,7 +270,7 @@
 </section>
 
 <!-- ======================================================= المراكز -->
-<section class="section section--alt" id="centers">
+<section class="section" id="centers">
   <div class="wrap">
     <div class="sec-head">
       <p class="eyebrow"><span class="eyebrow__dot"></span> أين ندرس؟</p>
@@ -269,7 +282,7 @@
 </section>
 
 <!-- ======================================================= التسجيلات -->
-<section class="section" id="register">
+<section class="section section--alt" id="register">
   <div class="wrap">
     <div class="sec-head">
       <p class="eyebrow"><span class="eyebrow__dot"></span> انضم إلينا</p>
@@ -330,7 +343,7 @@
 </section>
 
 <!-- ======================================================= آراء -->
-<section class="section section--alt" id="testimonials">
+<section class="section" id="testimonials">
   <div class="wrap">
     <div class="sec-head">
       <p class="eyebrow"><span class="eyebrow__dot"></span> شهادات</p>
@@ -341,7 +354,7 @@
 </section>
 
 <!-- ======================================================= أسئلة -->
-<section class="section" id="faq">
+<section class="section section--alt" id="faq">
   <div class="wrap wrap--narrow">
     <div class="sec-head">
       <p class="eyebrow"><span class="eyebrow__dot"></span> استفسارات</p>
@@ -440,6 +453,7 @@
         <h4 class="pane__h">أهم النقاط</h4>
         <ul class="points" id="lessonPoints"></ul>
         <div id="lessonFigure"></div>
+        <div id="lessonFiles"></div>
         <div class="pane__cta">
           <button class="btn btn--primary" type="button" id="goQuiz">ابدأ الاختبار</button>
         </div>
@@ -477,6 +491,7 @@
 </section>
 
 <script src="assets/js/content.js"></script>
+<script src="assets/js/grader.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>

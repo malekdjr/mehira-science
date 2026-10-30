@@ -233,6 +233,37 @@ select option{background:var(--ink-800)}
 .spin{width:22px; height:22px; border-radius:50%; border:3px solid rgba(159,178,232,.2); border-top-color:var(--sky); animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ============================================================ الاختبارات المتدرجة والأسئلة الكتابية */
+input[type=number]{width:100%; padding:10px 13px; border-radius:var(--r-sm); border:1px solid var(--line-2); background:rgba(5,14,22,.65)}
+.chip--gold{color:var(--gold); border-color:rgba(247,209,84,.45); background:rgba(247,209,84,.08)}
+.adders{display:flex; flex-wrap:wrap; gap:8px}
+.adders .btn--add{flex:1; min-width:170px}
+.sub-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 0 10px}
+.sub-row .sub{margin:0}
+.sub-row > b{font-family:var(--f-head); color:var(--sky); font-size:.9rem}
+.checks{display:grid; align-content:end; gap:4px}
+.checks .check{margin-top:4px}
+.try{margin-top:18px; padding:14px 16px; border-radius:var(--r); border:1px dashed rgba(92,225,230,.35); background:rgba(92,225,230,.04)}
+.try .sub{margin-top:0}
+.try .muted{font-size:.82rem; margin-bottom:10px}
+.try__out p{margin:12px 0 6px}
+.try__out ul{display:grid; gap:4px; font-size:.86rem; margin:0; padding:0; list-style:none}
+.try__out li.ok{color:#43E09A} .try__out li.part{color:var(--gold)} .try__out li.miss{color:var(--rose)}
+
+/* ============================================================ الملخصات PDF */
+.drop{margin-top:16px; display:grid; justify-items:center; gap:4px; padding:26px; border-radius:var(--r-lg); border:2px dashed var(--line-2); background:rgba(5,14,22,.35); cursor:pointer; text-align:center; transition:.15s}
+.drop:hover{border-color:var(--sky); background:rgba(92,225,230,.05)}
+.drop .i{width:30px; height:30px; color:var(--sky)}
+.drop b{font-family:var(--f-head)}
+.drop small{color:var(--fg-faint)}
+.files{display:grid; gap:12px}
+.file{display:flex; gap:14px; align-items:flex-start; padding:14px; border-radius:var(--r); border:1px solid var(--line); background:rgba(5,14,22,.42)}
+.file__i{width:50px; height:58px; flex:none; border-radius:10px; display:grid; place-items:center; align-content:center; background:rgba(255,107,129,.12); color:var(--rose)}
+.file__i b{font-size:.62rem; font-family:var(--f-head); letter-spacing:1px}
+.file__main{flex:1; min-width:0; display:grid; gap:10px}
+.file__tools{display:grid; gap:6px; flex:none}
+@media (max-width:640px){ .file{flex-wrap:wrap} .file__tools{display:flex; width:100%; justify-content:flex-end} }
+
 /* لا تتمدد الأعمدة بسبب العناوين الطويلة */
 .page,.list,.rows,.vids,.strs,.opts,.recent,.qed,.ued{grid-template-columns:minmax(0,1fr)}
 .qed,.ued{display:grid}

@@ -41,6 +41,8 @@
     clock: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 10.6V6h-2v7.4l5 3 1-1.7z"/>',
     quiz:  '<path d="M11 18h2v-2h-2zm1-16a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM12 6a4 4 0 0 0-4 4h2a2 2 0 1 1 3.4 1.4l-1.2 1.3A3 3 0 0 0 11 15h2a1.7 1.7 0 0 1 .6-1.3l.9-.9A4 4 0 0 0 12 6z"/>',
     video: '<path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z"/>',
+    file:  '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm-1 7V3.5L18.5 9zM8 13h8v2H8zm0 4h8v2H8zm0-8h3v2H8z"/>',
+    down:  '<path d="M19 9h-4V3H9v6H5l7 7zM5 18v2h14v-2z"/>',
     pin:   '<path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>',
     chat:  '<path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2zm3 6v2h2V9zm4 0v2h2V9zm4 0v2h2V9z"/>',
     send:  '<path d="M3 20.5 21 12 3 3.5 3 10l12 2-12 2z"/>'
@@ -102,17 +104,22 @@
 
   function refreshProgress() {
     const units = allUnits();
-    const done = units.filter(u => progress[u.key] && progress[u.key].passed).length;
-    const pct = units.length ? Math.round(done / units.length * 100) : 0;
+    /* وحدة بمستويات تُحسب بنسبة المستويات المُنجزة */
+    const part = (u) => levelsOf(u.unit)
+      ? passedCount(u.key, u.unit) / u.unit.levels.length
+      : (progress[u.key] && progress[u.key].passed ? 1 : 0);
+    const done = units.filter(u => part(u) === 1).length;
+    const started = units.some(u => part(u) > 0);
+    const pct = units.length ? Math.round(units.reduce((n, u) => n + part(u), 0) / units.length * 100) : 0;
 
     const bar = $('#progressBar');
     if (bar) bar.style.width = pct + '%';
 
     const lbl = $('#progressLabel');
     if (lbl) {
-      lbl.textContent = done === 0
+      lbl.textContent = !started
         ? 'لم تبدأ بعد — اختر وحدة وابدأ الاختبار'
-        : `أنجزت ${done} من ${units.length} وحدة (${pct}%)`;
+        : `تقدّمك ${pct}% — أنجزت ${done} من ${units.length} وحدة بالكامل`;
     }
   }
 
@@ -148,23 +155,29 @@
     field.units.forEach(u => {
       const key = field.id + ':' + u.code;
       const st = progress[key];
-      const done = st && st.passed;
-      const qn = (u.quiz || []).length;
+      const L = levelsOf(u);
+      const qn = questionCount(u);
+      const lvDone = L ? passedCount(key, u) : 0;
+      const done = L ? lvDone > 0 : st && st.passed;
+      const stateText = L
+        ? (lvDone ? `المستوى ${lvDone}/${L.length}` : 'لم تبدأ')
+        : (done ? 'أنجزت ' + st.score + '/' + st.total : 'لم تبدأ');
+      const files = resourcesFor(field.id, u.code).length;
 
-      const card = el('button', 'unit reveal is-in');
+      const card = el('button', 'unit reveal is-in' + (L ? ' unit--levels' : ''));
       card.type = 'button';
       card.innerHTML =
         `<div class="unit__top">
            <span class="unit__num">${esc(u.code)}</span>
-           <span class="unit__state ${done ? 'unit__state--done' : 'unit__state--todo'}">
-             ${done ? 'أنجزت ' + st.score + '/' + st.total : 'لم تبدأ'}
-           </span>
+           <span class="unit__state ${done ? 'unit__state--done' : 'unit__state--todo'}">${esc(stateText)}</span>
          </div>
          <h3>${esc(u.title)}</h3>
          <p>${esc(u.desc)}</p>
+         ${L ? `<div class="unit__lv">${L.map((_, i) => `<i class="${i < lvDone ? 'is-on' : ''}"></i>`).join('')}<small>${L.length} مستويات · أسئلة كتابية</small></div>` : ''}
          <div class="unit__meta">
            <span>${ico('clock')}${esc(u.duration || '—')}</span>
            <span>${ico('quiz')}${qn} سؤال</span>
+           ${files ? `<span>${ico('file')}${files} ملخص</span>` : ''}
            <span class="unit__go">افتح ←</span>
          </div>`;
       card.addEventListener('click', () => openLesson(field, u));
@@ -214,6 +227,37 @@
            </div>
          </div>`));
     });
+  }
+
+  /* ===================================================== الملخصات (PDF) */
+  const resources = () => (C.resources || []).filter(r => r && r.file);
+  const resourcesFor = (fieldId, code) => resources().filter(r => r.field === fieldId && (!r.unit || r.unit === code));
+  const fmtSize = (b) => !b ? '' : b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+
+  function resourceHtml(r) {
+    const f = (C.fields || []).find(x => x.id === r.field);
+    const u = f && r.unit ? (f.units || []).find(x => x.code === r.unit) : null;
+    const where = f ? `${f.title}${u ? ' · ' + u.code + ' — ' + u.title : ' · كل الوحدات'}` : 'عام';
+    return `<a class="res" href="${esc(r.file)}" download target="_blank" rel="noopener">
+              <span class="res__i">${ico('file')}<b>PDF</b></span>
+              <span class="res__t"><b>${esc(r.title || 'ملخص')}</b><small>${esc(where)}${r.size ? ' · ' + fmtSize(r.size) : ''}</small></span>
+              <span class="res__d">${ico('down')}<span>تحميل</span></span>
+            </a>`;
+  }
+
+  function renderResources() {
+    const g = $('#resourcesGrid');
+    if (!g) return;
+    const list = resources();
+    if (!list.length) {
+      g.innerHTML = `<div class="empty">${ico('file')}<p>ستُضاف ملخصات الأستاذ بصيغة PDF قريباً.</p></div>`;
+      return;
+    }
+    const groups = [{ id: '', title: 'ملفات عامة' }].concat((C.fields || []).map(f => ({ id: f.id, title: `${f.title} — ${f.subtitle}` })));
+    g.innerHTML = groups.map(gr => {
+      const items = list.filter(r => (r.field || '') === gr.id);
+      return items.length ? `<div class="res-group"><h3>${esc(gr.title)}</h3><div class="res-list">${items.map(resourceHtml).join('')}</div></div>` : '';
+    }).join('');
   }
 
   /* ===================================================== المراكز */
@@ -366,6 +410,16 @@
     src.hidden = !unit.source;
     src.innerHTML = unit.source ? `${ico('book')}<span>المصدر: ${esc(unit.source)}</span>` : '';
 
+    /* ملخصات PDF الخاصة بهذه الوحدة */
+    const files = resourcesFor(field.id, unit.code);
+    const fl = $('#lessonFiles');
+    fl.innerHTML = files.length
+      ? `<h4 class="pane__h">ملخصات للتحميل</h4><div class="res-list">${files.map(resourceHtml).join('')}</div>`
+      : '';
+
+    /* زر الاختبار يذكر المستويات */
+    $('#goQuiz').textContent = levelsOf(unit) ? `ابدأ الاختبار (${unit.levels.length} مستويات)` : 'ابدأ الاختبار';
+
     showPane('lesson');
     buildQuiz();
 
@@ -407,91 +461,302 @@
             </figure>`;
   }
 
-  /* ===================================================== محرّك الاختبار */
-  let qi = 0, score = 0, answered = false;
+  /* ===================================================== محرّك الاختبار
+     وحدة عادية: unit.quiz (اختيار من متعدد).
+     وحدة بمستويات: unit.levels = [{ title, desc, pass, questions: [...] }]
+       أنواع الأسئلة: mcq · tf (صح/خطأ) · write (إجابة كتابية تُصحَّح بسلّم تنقيط) */
+  const LSTORE = 'mehira.levels.v1';
+  const ASTORE = 'mehira.answers.v1';
+  const readStore = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const writeStore = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* */ } };
+  let levelProg = readStore(LSTORE);
+  let drafts = readStore(ASTORE);
+
+  const WRITE_WEIGHT = 2;                 /* السؤال الكتابي = سؤالين من الاختيار */
+  const levelsOf = (u) => (Array.isArray(u.levels) && u.levels.length ? u.levels : null);
+  const levelPass = (L) => Number(L.pass) || 60;
+  const levelState = (key, i) => (levelProg[key] && levelProg[key][i]) || null;
+  const passedCount = (key, u) => (levelsOf(u) || []).filter((L, i) => (levelState(key, i) || {}).passed).length;
+  const isUnlocked = (key, i) => i === 0 || !!(levelState(key, i - 1) || {}).passed;
+  const questionCount = (u) => levelsOf(u)
+    ? u.levels.reduce((n, L) => n + (L.questions || []).length, 0)
+    : (u.quiz || []).length;
+
+  const TYPE_LABEL = { mcq: 'اختيار من متعدد', tf: 'صح أم خطأ', write: 'إجابة كتابية' };
+  const KIND_LABEL = { analysis: 'تحليل وثيقة', interpret: 'تفسير', text: 'نص علمي', apply: 'تطبيق / حساب', hypothesis: 'فرضية' };
+
+  let run = null;   /* { qs, li, qi, got: [], max: [], answered } */
 
   function buildQuiz() {
-    qi = 0; score = 0; answered = false;
-    renderQuestion();
+    if (!current) return;
+    if (levelsOf(current.unit)) renderLevels();
+    else startRun(current.unit.quiz || [], -1);
   }
 
-  function renderQuestion() {
+  /* ---------------------------------------------- اختيار المستوى */
+  function renderLevels() {
+    run = null;
     const wrap = $('#quizWrap');
-    const quiz = (current && current.unit.quiz) || [];
-    wrap.innerHTML = '';
+    const { unit, key } = current;
+    const L = levelsOf(unit);
+    const done = passedCount(key, unit);
+    wrap.innerHTML =
+      `<div class="lv-head">
+         <div><b>اختبار متدرّج — ${L.length} مستويات</b>
+           <p>كل مستوى يفتح الذي بعده. المستويات الأخيرة فيها أسئلة كتابية على نمط البكالوريا تُصحَّح حسب المنهجية والمصطلحات.</p></div>
+         <span class="lv-head__p">${done}/${L.length}</span>
+       </div>`;
+    const grid = el('div', 'lv-grid');
+    L.forEach((lv, i) => {
+      const st = levelState(key, i);
+      const open = isUnlocked(key, i);
+      const types = {};
+      (lv.questions || []).forEach(q => { const t = q.type || 'mcq'; types[t] = (types[t] || 0) + 1; });
+      const chips = Object.entries(types).map(([t, n]) =>
+        `<span class="lv-chip lv-chip--${t}">${n} ${esc(TYPE_LABEL[t] || t)}</span>`).join('');
+      const b = el('button', 'lv' + (st && st.passed ? ' is-passed' : '') + (open ? '' : ' is-locked'),
+        `<span class="lv__n">${st && st.passed ? ico('check') : i + 1}</span>
+         <span class="lv__body">
+           <b>${esc(lv.title || 'المستوى ' + (i + 1))}</b>
+           <small>${esc(lv.desc || '')}</small>
+           <span class="lv__chips">${chips}</span>
+         </span>
+         <span class="lv__state">${!open ? '🔒 أنجز المستوى السابق' : st ? `أفضل نتيجة ${st.best}%` : 'ابدأ ←'}</span>`);
+      b.type = 'button';
+      b.disabled = !open;
+      b.addEventListener('click', () => startRun(lv.questions || [], i));
+      grid.appendChild(b);
+    });
+    wrap.appendChild(grid);
+    if (done) {
+      const reset = el('button', 'lv-reset', 'إعادة كل المستويات من البداية');
+      reset.type = 'button';
+      reset.addEventListener('click', () => {
+        if (!confirm('مسح نتائج مستويات هذه الوحدة؟')) return;
+        delete levelProg[key];
+        writeStore(LSTORE, levelProg);
+        syncUnitProgress();
+        renderLevels();
+      });
+      wrap.appendChild(reset);
+    }
+  }
 
-    if (!quiz.length) {
-      wrap.appendChild(el('div', 'empty', `${ico('quiz')}<p>لا توجد أسئلة لهذه الوحدة بعد.</p>`));
+  function startRun(qs, li) {
+    run = { qs, li, qi: 0, got: [], max: qs.map(q => (q.type === 'write' ? WRITE_WEIGHT : 1)), answered: false };
+    renderStep();
+  }
+
+  /* ---------------------------------------------- عرض السؤال */
+  function renderStep() {
+    const wrap = $('#quizWrap');
+    wrap.innerHTML = '';
+    const { qs } = run;
+
+    if (!qs.length) {
+      wrap.appendChild(el('div', 'empty', `${ico('quiz')}<p>لا توجد أسئلة هنا بعد.</p>`));
       return;
     }
+    if (run.qi >= qs.length) return renderResult();
 
-    if (qi >= quiz.length) return renderResult(quiz.length);
+    const q = qs[run.qi];
+    run.answered = false;
 
-    const q = quiz[qi];
-
-    const bar = el('div', 'quiz__bar',
-      `<span class="quiz__count">${qi + 1} / ${quiz.length}</span>
-       <span class="quiz__track"><i style="width:${(qi / quiz.length) * 100}%"></i></span>`);
-    wrap.appendChild(bar);
-
-    if (q.ref) {
-      wrap.appendChild(el('p', 'quiz__src', `${ico('book')}<span>من كتاب الأستاذ · ${esc(q.ref)}</span>`));
+    if (run.li >= 0) {
+      const lv = levelsOf(current.unit)[run.li];
+      const top = el('div', 'quiz__lv',
+        `<button type="button" class="quiz__back">← المستويات</button><span>${esc(lv.title || '')}</span>`);
+      $('.quiz__back', top).addEventListener('click', () => {
+        if (run.qi > 0 && !confirm('الخروج من المستوى؟ لن تُحفظ نتيجته.')) return;
+        renderLevels();
+      });
+      wrap.appendChild(top);
     }
-    wrap.appendChild(el('p', 'quiz__q', esc(q.q)));
-    if (q.img) wrap.appendChild(el('div', 'quiz__doc', figureHtml(q.img, q.cap || 'الوثيقة — من كتاب الأستاذ')));
 
-    const opts = el('div', 'quiz__opts');
+    wrap.appendChild(el('div', 'quiz__bar',
+      `<span class="quiz__count">${run.qi + 1} / ${qs.length}</span>
+       <span class="quiz__track"><i style="width:${(run.qi / qs.length) * 100}%"></i></span>`));
+
+    const meta = [];
+    if (q.type === 'write') meta.push(`<span class="quiz__tag quiz__tag--write">${ico('quiz')}سؤال كتابي · ${esc(KIND_LABEL[q.kind] || 'تحليل')}</span>`);
+    else if (q.type === 'tf') meta.push(`<span class="quiz__tag">صح أم خطأ؟</span>`);
+    if (q.ref) meta.push(`<span class="quiz__src">${ico('book')}<span>من كتاب الأستاذ · ${esc(q.ref)}</span></span>`);
+    if (meta.length) wrap.appendChild(el('div', 'quiz__meta', meta.join('')));
+
+    wrap.appendChild(el('p', 'quiz__q', esc(q.q).replace(/\n/g, '<br>')));
+    if (q.img) wrap.appendChild(el('div', 'quiz__doc', figureHtml(q.img, q.cap || 'الوثيقة — من كتاب الأستاذ')));
+    if (q.table) wrap.appendChild(el('div', 'quiz__table', tableHtml(q.table)));
+
+    if (q.type === 'write') return renderWrite(q, wrap);
+    if (q.type === 'tf') return renderChoices(q, wrap, ['صحيح', 'خطأ'], q.answer ? 0 : 1);
+    return renderChoices(q, wrap, q.options || [], q.answer);
+  }
+
+  /* جدول من نص: سطر لكل صف، والخانات مفصولة بـ | — السطر الأول عناوين */
+  function tableHtml(src) {
+    const rows = String(src).trim().split('\n').map(r => r.split('|').map(c => c.trim()));
+    const [head, ...body] = rows;
+    return `<table class="dtable"><thead><tr>${head.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+            <tbody>${body.map(r => `<tr>${r.map((c, i) => i === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+
+  function renderChoices(q, wrap, labels, correct) {
+    const opts = el('div', 'quiz__opts' + (q.type === 'tf' ? ' quiz__opts--tf' : ''));
     const letters = ['أ', 'ب', 'ج', 'د', 'هـ'];
-    (q.options || []).forEach((text, i) => {
-      const b = el('button', 'opt',
-        `<span class="opt__k">${letters[i] || i + 1}</span><span>${esc(text)}</span>`);
+    labels.forEach((text, i) => {
+      const k = q.type === 'tf' ? (i === 0 ? '✓' : '✗') : (letters[i] || i + 1);
+      const b = el('button', 'opt', `<span class="opt__k">${k}</span><span>${esc(text)}</span>`);
       b.type = 'button';
-      b.addEventListener('click', () => pick(i, q, opts, wrap, quiz.length));
+      b.addEventListener('click', () => {
+        if (run.answered) return;
+        run.answered = true;
+        $$('.opt', opts).forEach((x, j) => {
+          x.disabled = true;
+          if (j === correct) x.classList.add('is-right');
+          else if (j === i) x.classList.add('is-wrong');
+        });
+        const ok = i === correct;
+        run.got[run.qi] = ok ? 1 : 0;
+        if (q.explain) {
+          wrap.appendChild(el('p', 'quiz__exp',
+            `<b>${ok ? 'إجابة صحيحة' : 'الإجابة الصحيحة'}:</b> ${esc(q.explain)}`));
+        }
+        wrap.appendChild(nextNav());
+        $('.quiz__nav .btn', wrap).focus();
+      });
       opts.appendChild(b);
     });
     wrap.appendChild(opts);
   }
 
-  function pick(i, q, opts, wrap, total) {
-    if (answered) return;
-    answered = true;
-
-    const buttons = $$('.opt', opts);
-    buttons.forEach((b, k) => {
-      b.disabled = true;
-      if (k === q.answer) b.classList.add('is-right');
-      else if (k === i) b.classList.add('is-wrong');
-    });
-    if (i === q.answer) score++;
-
-    if (q.explain) {
-      wrap.appendChild(el('p', 'quiz__exp',
-        `<b>${i === q.answer ? 'إجابة صحيحة' : 'الإجابة الصحيحة'}:</b> ${esc(q.explain)}`));
-    }
-
+  function nextNav(extra) {
     const nav = el('div', 'quiz__nav');
-    const next = el('button', 'btn btn--primary', qi + 1 >= total ? 'عرض النتيجة' : 'السؤال التالي');
+    if (extra) nav.appendChild(extra);
+    const last = run.qi + 1 >= run.qs.length;
+    const next = el('button', 'btn btn--primary', last ? 'عرض النتيجة' : 'السؤال التالي');
     next.type = 'button';
-    next.addEventListener('click', () => { qi++; answered = false; renderQuestion(); });
+    next.addEventListener('click', () => { run.qi++; renderStep(); $('.modal__body').scrollTop = 0; });
     nav.appendChild(next);
-    wrap.appendChild(nav);
-    next.focus();
+    return nav;
   }
 
-  function renderResult(total) {
-    const wrap = $('#quizWrap');
-    const pct = Math.round(score / total * 100);
-    const passed = pct >= 60;
+  /* ---------------------------------------------- السؤال الكتابي */
+  function renderWrite(q, wrap) {
+    const G = window.MehiraGrader;
+    const dkey = `${current.key}|${run.li}|${run.qi}`;
+    const guide = G && G.METHOD[q.kind];
 
-    if (current) {
+    if (guide) {
+      wrap.appendChild(el('details', 'wq__guide',
+        `<summary>${ico('target')} منهجية الإجابة: ${esc(guide.name)}</summary>
+         <ol>${guide.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>`));
+    }
+
+    const box = el('div', 'wq');
+    const ta = el('textarea', 'wq__ta');
+    ta.rows = q.kind === 'text' ? 12 : 8;
+    ta.placeholder = 'اكتب إجابتك هنا كما تكتبها في ورقة البكالوريا…';
+    ta.value = drafts[dkey] || '';
+    const count = el('span', 'wq__count');
+    const check = el('button', 'btn btn--primary', `${ico('check')} صحّح إجابتي`);
+    check.type = 'button';
+    const paint = () => {
+      const n = G ? G.wordCount(ta.value) : 0;
+      count.textContent = `${n} كلمة` + (q.min ? ` · المنصوح به ${q.min} كلمة على الأقل` : '');
+      count.classList.toggle('is-low', !!q.min && n < q.min);
+      check.disabled = n < 3;
+    };
+    ta.addEventListener('input', () => { drafts[dkey] = ta.value; writeStore(ASTORE, drafts); paint(); });
+    paint();
+    const feedback = el('div', 'wq__fb');
+    box.append(ta, el('div', 'wq__bar', ''), feedback);
+    $('.wq__bar', box).append(count, check);
+    wrap.appendChild(box);
+
+    let nav = null;
+    check.addEventListener('click', () => {
+      if (!G) return;
+      const r = G.grade(q, ta.value);
+      run.got[run.qi] = Math.round((r.score / r.total) * WRITE_WEIGHT * 100) / 100;
+      feedback.innerHTML = feedbackHtml(q, r);
+      check.innerHTML = `${ico('check')} أعد التصحيح بعد التعديل`;
+      if (!nav) { nav = nextNav(); wrap.appendChild(nav); }
+      feedback.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    if (!G) feedback.innerHTML = '<p class="wq__warn">تعذّر تحميل المصحّح الآلي. حدّث الصفحة.</p>';
+  }
+
+  function feedbackHtml(q, r) {
+    const crit = (list) => list.map(c =>
+      `<li class="${c.ok ? 'is-ok' : c.partial ? 'is-part' : 'is-miss'}">
+         <span class="fb__i">${c.ok ? '✓' : c.partial ? '◐' : '✗'}</span>
+         <span class="fb__t">${esc(c.t)}</span>
+         <span class="fb__p" dir="ltr">${c.got} / ${c.p}</span>
+       </li>`).join('');
+    const missing = [...r.content, ...r.method].filter(c => !c.ok);
+    return `
+      <div class="fb fb--${r.bandKey}">
+        <div class="fb__head">
+          <div><small>علامتك</small><b dir="ltr">${r.score} / ${r.total}</b></div>
+          <div class="fb__band">${esc(r.band)} · ${r.pct}%</div>
+        </div>
+        <div class="fb__track"><i style="width:${r.pct}%"></i></div>
+        ${r.short ? `<p class="wq__warn">⚠ إجابتك قصيرة (${r.words} كلمة). في البكالوريا تحتاج إجابة مفصّلة${q.kind === 'apply' ? ' ولا تكتفِ بالنتيجة' : ' — خُفّضت العلامة'}.</p>` : ''}
+        ${r.warnings.map(w => `<p class="wq__warn">⚠ ${esc(w)}</p>`).join('')}
+        ${r.content.length ? `<h5>المضمون العلمي</h5><ul class="fb__list">${crit(r.content)}</ul>` : ''}
+        ${r.method.length ? `<h5>المنهجية</h5><ul class="fb__list">${crit(r.method)}</ul>` : ''}
+        ${missing.length ? `<p class="fb__tip">💡 لتحسين إجابتك أضف: ${missing.slice(0, 3).map(c => '«' + esc(c.t) + '»').join('، ')}.</p>` : '<p class="fb__tip fb__tip--ok">🎉 إجابة كاملة! كل عناصر سلّم التنقيط موجودة.</p>'}
+        ${q.model ? `<details class="fb__model"><summary>الإجابة النموذجية</summary><p>${esc(q.model).replace(/\n/g, '<br>')}</p></details>` : ''}
+        <p class="fb__note">التصحيح آلي حسب سلّم تنقيط الأستاذ (الكلمات العلمية والمنهجية). قارن دائماً مع الإجابة النموذجية.</p>
+      </div>`;
+  }
+
+  /* ---------------------------------------------- النتيجة */
+  function syncUnitProgress() {
+    if (!current) return;
+    const { unit, key } = current;
+    const L = levelsOf(unit);
+    if (L) {
+      const n = passedCount(key, unit);
+      progress[key] = { score: n, total: L.length, passed: n === L.length, levels: true, at: Date.now() };
+      saveProgress(progress);
+    }
+    refreshProgress();
+    renderUnits();
+  }
+
+  function renderResult() {
+    const wrap = $('#quizWrap');
+    const got = run.got.reduce((a, b) => a + (b || 0), 0);
+    const max = run.max.reduce((a, b) => a + b, 0) || 1;
+    const pct = Math.round(got / max * 100);
+    const leveled = run.li >= 0;
+    const L = leveled ? levelsOf(current.unit) : null;
+    const need = leveled ? levelPass(L[run.li]) : 60;
+    const passed = pct >= need;
+
+    if (leveled) {
+      const prev = levelState(current.key, run.li) || {};
+      (levelProg[current.key] = levelProg[current.key] || {})[run.li] = {
+        best: Math.max(prev.best || 0, pct), passed: !!prev.passed || passed, at: Date.now()
+      };
+      writeStore(LSTORE, levelProg);
+      syncUnitProgress();
+    } else if (current) {
       const prev = progress[current.key];
+      const score = Math.round(got);
       if (!prev || score > prev.score) {
-        progress[current.key] = { score, total, passed, at: Date.now() };
+        progress[current.key] = { score, total: run.qs.length, passed, at: Date.now() };
         saveProgress(progress);
         refreshProgress();
         renderUnits();
       }
     }
+
+    const hasNext = leveled && run.li + 1 < L.length;
+    const title = passed
+      ? (leveled ? (hasNext ? 'أحسنت! فتحت المستوى التالي 🎉' : 'أحسنت! أنهيت كل المستويات 🏆') : 'أحسنت! نتيجة جيدة')
+      : (leveled ? `تحتاج ${need}% على الأقل لفتح المستوى التالي` : 'تحتاج مراجعة الوحدة');
 
     const R = 62, CIRC = 2 * Math.PI * R;
     wrap.innerHTML =
@@ -507,10 +772,12 @@
            </svg>
            <span class="result__pct">${pct}%</span>
          </div>
-         <h4>${passed ? 'أحسنت! نتيجة جيدة' : 'تحتاج مراجعة الوحدة'}</h4>
-         <p>أجبت بشكل صحيح على <b>${score}</b> من <b>${total}</b> أسئلة.</p>
+         <h4>${title}</h4>
+         <p>مجموع نقاطك <b>${Math.round(got * 100) / 100}</b> من <b>${max}</b>${run.max.some(m => m > 1) ? ' (السؤال الكتابي على نقطتين)' : ''}.</p>
          <div class="result__actions">
-           <button class="btn btn--primary" type="button" id="again">إعادة الاختبار</button>
+           ${passed && hasNext ? '<button class="btn btn--primary" type="button" id="nextLevel">المستوى التالي ←</button>' : ''}
+           <button class="btn ${passed && hasNext ? 'btn--ghost' : 'btn--primary'}" type="button" id="again">${leveled ? 'إعادة المستوى' : 'إعادة الاختبار'}</button>
+           ${leveled ? '<button class="btn btn--ghost" type="button" id="allLevels">كل المستويات</button>' : ''}
            <button class="btn btn--ghost" type="button" id="backLesson">العودة للدرس</button>
          </div>
        </div>`;
@@ -520,8 +787,11 @@
       if (fg) fg.style.strokeDashoffset = String(CIRC * (1 - pct / 100));
     });
 
-    $('#again').addEventListener('click', buildQuiz);
+    const li = run.li, qs = run.qs;
+    $('#again').addEventListener('click', () => startRun(qs, li));
     $('#backLesson').addEventListener('click', () => showPane('lesson'));
+    if ($('#allLevels')) $('#allLevels').addEventListener('click', renderLevels);
+    if ($('#nextLevel')) $('#nextLevel').addEventListener('click', () => startRun(L[li + 1].questions || [], li + 1));
   }
 
   /* ===================================================== تفاعلات عامة */
@@ -791,6 +1061,7 @@
   renderAbout();
   renderTabs();
   renderUnits();
+  renderResources();
   renderSchedule();
   renderCenters();
   renderRegistration();
